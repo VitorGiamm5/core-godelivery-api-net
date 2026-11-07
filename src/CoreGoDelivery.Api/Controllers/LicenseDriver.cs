@@ -1,14 +1,14 @@
-﻿using CoreGoDelivery.Api.Controllers.Base;
+using CoreGoDelivery.Api.Controllers.Base;
 using CoreGoDelivery.Application.Services.Internal.LicenseDriver.Commands.Create;
 using CoreGoDelivery.Application.Services.Internal.LicenseDriver.Queries.GetOneLicenseFile;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CoreGoDelivery.Api.Controllers;
 
 [Route("api/license-driver")]
 [ApiController]
-public class LicenseDriver(IMediator _mediator) : BaseApiController
+public class LicenseDriver(IMediator _mediator, ILogger<BaseApiController> logger) : BaseApiController(logger)
 {
 
     [HttpPost("{id}/upload-cnh")]

@@ -9,7 +9,11 @@ public static class DeliverierBuildMessageFullName
     {
         var paramName = nameof(data.FullName);
 
-        if (string.IsNullOrWhiteSpace(data.FullName))
+        if (string.IsNullOrWhiteSpace(data.FullName) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(
+                data.FullName.Trim(),
+                CoreGoDelivery.Domain.Consts.Regex.RegexCollectionPatterns.FULL_NAME_PATTERN,
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant))
         {
             message.Append(paramName.AppendError());
         }

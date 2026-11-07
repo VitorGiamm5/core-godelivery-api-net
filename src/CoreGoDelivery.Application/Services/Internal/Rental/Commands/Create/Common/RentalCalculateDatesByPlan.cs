@@ -7,13 +7,18 @@ public static class RentalCalculateDatesByPlan
 {
     public static RentalEntity Calculate(RentalPlanEntity plan)
     {
-        var result = new RentalEntity()
-        {
-            StartDate = DateTime.UtcNow,
-            EndDate = DateTime.UtcNow.AddDays(plan.DaysQuantity),
-            EstimatedReturnDate = DateTime.UtcNow.AddDays(plan.DaysQuantity)
-        };
+        return Calculate(plan, DateTime.UtcNow);
+    }
 
-        return result;
+    public static RentalEntity Calculate(RentalPlanEntity plan, DateTime startDateUtc)
+    {
+        var returnDate = startDateUtc.AddDays(plan.DaysQuantity);
+
+        return new RentalEntity
+        {
+            StartDate = startDateUtc,
+            EndDate = returnDate,
+            EstimatedReturnDate = returnDate
+        };
     }
 }

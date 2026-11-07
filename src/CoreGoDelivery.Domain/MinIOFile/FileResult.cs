@@ -2,6 +2,6 @@
 
 public class FileResult
 {
-    public string FileName { get; set; }
-    public string Base64Content { get; set; }
+    public required string FileName { get; set; }
+    public required string Base64Content { get; set; }
 }

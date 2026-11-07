@@ -17,7 +17,14 @@ public class RentalRepository : BaseRepository<RentalEntity>, IRentalRepository
             .Set<RentalEntity>()
             .AddAsync(data);
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (PostgreSqlConstraintErrors.IsUniqueViolation(exception))
+        {
+            return false;
+        }
 
         return IsSuccessCreate(result);
     }
@@ -41,20 +48,11 @@ public class RentalRepository : BaseRepository<RentalEntity>, IRentalRepository
 
     public async Task<bool> UpdateReturnedToBaseDate(string id, DateTime date)
     {
-        var rentalEntity = await _context.Set<RentalEntity>()
-            .AsTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
+        var updatedRows = await _context.Set<RentalEntity>()
+            .Where(x => x.Id == id && x.ReturnedToBaseDate == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.ReturnedToBaseDate, (DateTime?)date));
 
-        if (rentalEntity == null)
-        {
-            return false;
-        }
-
-        rentalEntity.ReturnedToBaseDate = date;
-
-        await _context.SaveChangesAsync();
-
-        return true;
+        return updatedRows == 1;
     }
 
     public async Task<RentalEntity?> FindByMotorcycleId(string id)

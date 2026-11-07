@@ -62,6 +62,11 @@ artifacts/
 **/obj
 .vs*
 **.suo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
 wwwroot
 *_i.c
 *_p.c

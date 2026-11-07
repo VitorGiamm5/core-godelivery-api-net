@@ -1,8 +1,8 @@
-﻿using CoreGoDelivery.Application.Extensions;
+using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Domain.Consts;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.ChangePlateById;
 
@@ -26,7 +26,7 @@ public class MotorcycleChangePlateHandler : IRequestHandler<MotorcycleChangePlat
         _validator = validator;
     }
 
-    public async Task<ActionResult> Handle(MotorcycleChangePlateCommand command, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(MotorcycleChangePlateCommand command, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 
@@ -37,16 +37,20 @@ public class MotorcycleChangePlateHandler : IRequestHandler<MotorcycleChangePlat
             return apiReponse;
         }
 
-        command.Plate.RemoveCharactersToUpper();
+        command.Plate = command.Plate.RemoveCharactersToUpper();
 
         var success = await _repositoryMotorcycle.ChangePlateByIdAsync(command.Id!, command.Plate!);
 
+        if (!success)
+        {
+            apiReponse.SetError(CommomMessagesConst.MESSAGE_INVALID_DATA);
+            return apiReponse;
+        }
+
         apiReponse.SetData(new
         {
-            menssage = CommomMessagesConst.MESSAGE_UPDATED_WITH_SUCCESS
+            message = CommomMessagesConst.MESSAGE_UPDATED_WITH_SUCCESS
         });
-
-        apiReponse.SetError(success ? "" : CommomMessagesConst.MESSAGE_INVALID_DATA);
 
         return apiReponse;
     }

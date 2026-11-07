@@ -7,9 +7,9 @@ namespace CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Commo
 
 public static class MotorcycleServiceMappers
 {
-    public static List<MotorcycleCreateCommand> MapEntityListToDto(List<MotorcycleEntity>? entity)
+    public static List<MotorcycleDto> MapEntityListToDto(List<MotorcycleEntity>? entity)
     {
-        List<MotorcycleCreateCommand> motorcycleDtos = [];
+        List<MotorcycleDto> motorcycleDtos = [];
 
         if (entity != null)
         {
@@ -21,15 +21,13 @@ public static class MotorcycleServiceMappers
         return motorcycleDtos;
     }
 
-    public static MotorcycleCreateCommand MapEntityToDto(MotorcycleEntity motorcycle)
+    public static MotorcycleDto MapEntityToDto(MotorcycleEntity motorcycle)
     {
-        var restult = new MotorcycleCreateCommand
-        {
-            Id = motorcycle.Id,
-            YearManufacture = motorcycle.YearManufacture,
-            ModelName = motorcycle!.MotorcycleModel!.Name,
-            Plate = motorcycle.PlateNormalized
-        };
+        var restult = new MotorcycleDto(
+            motorcycle.Id,
+            motorcycle.YearManufacture,
+            motorcycle.MotorcycleModel!.Name,
+            motorcycle.PlateNormalized);
 
         return restult;
     }

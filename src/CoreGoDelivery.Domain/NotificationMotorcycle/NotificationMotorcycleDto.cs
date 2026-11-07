@@ -4,9 +4,9 @@ namespace CoreGoDelivery.Domain.NotificationMotorcycle;
 
 public sealed class NotificationMotorcycleDto : BaseEntity
 {
-    public string Id { get; set; }
-    public string ModelMotorcycleId { get; set; }
-    public string PlateNormalized { get; set; }
-    public string MotorcycleId { get; set; }
+    public required string Id { get; set; }
+    public required string ModelMotorcycleId { get; set; }
+    public required string PlateNormalized { get; set; }
+    public required string MotorcycleId { get; set; }
     public int YearManufacture { get; set; }
 }

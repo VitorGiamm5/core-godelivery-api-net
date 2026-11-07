@@ -1,9 +1,9 @@
-﻿using CoreGoDelivery.Application.Extensions;
+using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Commons;
 using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.Motorcycle.Queries.GetOne;
 
@@ -16,7 +16,7 @@ public class MotorcycleGetOneQueryHandler : IRequestHandler<MotorcycleGetOneQuer
         _repositoryMotorcycle = repositoryMotorcycle;
     }
 
-    public async Task<ActionResult> Handle(MotorcycleGetOneQueryCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(MotorcycleGetOneQueryCommand request, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 

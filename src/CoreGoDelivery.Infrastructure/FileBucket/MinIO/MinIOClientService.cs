@@ -1,5 +1,5 @@
 ﻿using CoreGoDelivery.Domain.MinIOFile;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel.Args;
 
@@ -9,12 +9,11 @@ public class MinIOClientService : IMinIOClientService
 {
     private readonly IMinioClient _minioClient;
 
-    public MinIOClientService(IConfiguration configuration)
+    public MinIOClientService(IOptions<MinIOSettings> options)
     {
-        var minioSettings = configuration.GetSection("MinIOSettings").Get<MinIOSettings>();
-
+        var minioSettings = options.Value;
         _minioClient = new MinioClient()
-            .WithEndpoint(minioSettings!.Endpoint, minioSettings.Port)
+            .WithEndpoint($"{minioSettings.Endpoint}:{minioSettings.Port}")
             .WithCredentials(minioSettings.AccessKey, minioSettings.SecretKey)
             .WithSSL(minioSettings.UseSSL)
             .Build();
@@ -24,19 +23,10 @@ public class MinIOClientService : IMinIOClientService
 
     public async Task EnsureBucketExistsAsync(string bucketName)
     {
-        try
+        bool bucketExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucketName));
+        if (!bucketExists)
         {
-            bool bucketExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucketName));
-            if (!bucketExists)
-            {
-                await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(bucketName));
-                Console.WriteLine($"Bucket '{bucketName}' created successfully.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error ensuring bucket '{bucketName}': {ex.Message}");
-            throw;
+            await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(bucketName));
         }
     }
 }

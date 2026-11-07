@@ -1,5 +1,4 @@
 ﻿using CoreGoDelivery.Application.Extensions;
-using CoreGoDelivery.Domain.Enums.LicenceDriverType;
 using System.Text;
 
 namespace CoreGoDelivery.Application.Services.Internal.Deliverier.Commands.Create.MessageValidators;
@@ -10,7 +9,9 @@ public static class DeliverierBuildMessageLicenseType
     {
         var paramName = nameof(data.LicenseType);
 
-        if (!Enum.TryParse(data.LicenseType, ignoreCase: true, out LicenseTypeEnum _))
+        var licenseType = data.LicenseType?.Trim();
+        if (!string.Equals(licenseType, "A", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(licenseType, "AB", StringComparison.OrdinalIgnoreCase))
         {
             message.Append(paramName.AppendError());
         }

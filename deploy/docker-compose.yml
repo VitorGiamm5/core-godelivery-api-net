@@ -1,85 +1,150 @@
+name: local-godelivery-core
+
 networks:
-  91612379773_webnet:
+  local-godelivery-core-network:
+    name: local-godelivery-core-network
     driver: bridge
 
 services:
-  91612379773_postgres:
-    image: postgres:16.4
-    container_name: 91612379773_postgres
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18.6}
+    container_name: local-godelivery-core-postgres
     environment:
-      POSTGRES_USER: randandan
-      POSTGRES_PASSWORD: randandan_XLR
-      POSTGRES_DB: dbgodelivery
+      POSTGRES_USER: ${POSTGRES_USER:?Configure POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Configure POSTGRES_DB in .env}
+      PGDATA: ${POSTGRES_PGDATA:-/var/lib/postgresql/18/docker}
     ports:
-      - "9000:5432" # Expose host PostgreSQL
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-9000}:5432"
     volumes:
-      - 91612379773_pgdata:/var/lib/postgresql/data
+      - local-godelivery-core-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks:
-      - 91612379773_webnet
+      - local-godelivery-core-network
 
-  91612379773_rabbitmq:
-    image: rabbitmq:3-management
-    container_name: 91612379773_rabbitmq
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE:-rabbitmq:4.4.0-management}
+    container_name: local-godelivery-core-rabbitmq
     ports:
-      - "9001:5672"  # AMQP
-      - "9002:15672" # UI
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_AMQP_PORT:-9001}:5672"
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-9002}:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?Configure RABBITMQ_DEFAULT_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?Configure RABBITMQ_DEFAULT_PASS in .env}
     volumes:
-      - 91612379773_rabbitmq_data:/var/lib/rabbitmq
+      - local-godelivery-core-rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     networks:
-      - 91612379773_webnet
+      - local-godelivery-core-network
 
-  91612379773_minio:
-    image: minio/minio
-    container_name: 91612379773_minio
+  minio:
+    image: ${MINIO_IMAGE:-local-godelivery-core-minio:RELEASE.2025-10-15T17-29-55Z}
+    build:
+      context: ..
+      dockerfile: deploy/minio.Dockerfile
+      args:
+        GO_BUILDER_IMAGE: ${MINIO_BUILD_IMAGE:-golang:1.27.3-bookworm}
+        MINIO_RUNTIME_IMAGE: ${MINIO_RUNTIME_IMAGE:-debian:13.7-slim}
+        MINIO_VERSION: ${MINIO_VERSION:-RELEASE.2025-10-15T17-29-55Z}
+        MINIO_COMMIT: ${MINIO_COMMIT:-9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a}
+    container_name: local-godelivery-core-minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Configure MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Configure MINIO_ROOT_PASSWORD in .env}
     volumes:
-      - 91612379773_minio_data:/data
+      - local-godelivery-core-minio:/data
     ports:
-      - "9003:9000" # API MinIO
-      - "9004:9001" # Console MinIO
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${MINIO_API_PORT:-9003}:9000"
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9004}:9001"
     command: server /data --console-address ":9001"
     networks:
-      - 91612379773_webnet
+      - local-godelivery-core-network
 
-  91612379773_api_coregodelivery:
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.1}
+    container_name: local-godelivery-core-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Configure KEYCLOAK_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Configure KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_DB: dev-file
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?Configure KEYCLOAK_HOSTNAME in .env}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: ${KEYCLOAK_PORT:-8080}
+    ports:
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${KEYCLOAK_PORT:-8080}:${KEYCLOAK_PORT:-8080}"
+    volumes:
+      - local-godelivery-core-keycloak:/opt/keycloak/data
+      - ./keycloak/realm-godelivery.json:/opt/keycloak/data/import/realm-godelivery.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      local-godelivery-core-network:
+        aliases:
+          - keycloak.localhost
+
+  api:
+    image: local-godelivery-core-api:local
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    container_name: 91612379773_api_coregodelivery
+    container_name: local-godelivery-core-api
     ports:
-      - "9005:9005"
+      - "${DOCKER_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-9005}:${API_PORT:-9005}"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - Kestrel__Port=9005
-      - DOTNET_RUNNING_IN_CONTAINER=true
-      - RabbitMQ__Host=91612379773_rabbitmq
-      - RabbitMQ__Username=guest
-      - RabbitMQ__Password=guest
-      - RabbitMQ__Port=5672
-      - RabbitMQ__QueuesName__MotorcycleNotificationPublishQueue=motorcycle_notification_queue
-      - RabbitMQ__QueuesName__MotorcycleNotificationConsumerQueue=motorcycle_notification_queue
-      - MinIOSettings__Endpoint=91612379773_minio
-      - MinIOSettings__Port=9000
-      - MinIOSettings__AccessKey=V5SAuF1U4Ma2zW9e8PgW
-      - MinIOSettings__SecretKey=OpsKYLv87DDjXNZMPYRaiB3Q4ivktSaZOmzVIJkK
-      - MinIOSettings__UseSSL=false
-      - MinIOSettings__BucketLicenseCnh=license-cnh
-      - ConnectionStrings__Postgres=Server=91612379773_postgres; Port=5432; Database=dbgodelivery; User ID=randandan; Password=randandan_XLR;
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: ""
+      ASPNETCORE_URLS: ""
+      Kestrel__Port: ${API_PORT:-9005}
+      Jwt__Authority: ${JWT_AUTHORITY:?Configure JWT_AUTHORITY in .env}
+      Jwt__Audience: ${JWT_AUDIENCE:?Configure JWT_AUDIENCE in .env}
+      Jwt__RequireHttpsMetadata: ${JWT_REQUIRE_HTTPS_METADATA:-false}
+      Database__ConnectionTimeoutSeconds: ${DATABASE_TIMEOUT_SECONDS:-30}
+      Database__GssEncryptionMode: ${DATABASE_GSS_ENCRYPTION_MODE:-Disable}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_DEFAULT_USER}
+      RabbitMQ__Password: ${RABBITMQ_DEFAULT_PASS}
+      RabbitMQ__Port: 5672
+      RabbitMQ__ConnectionRetryCount: ${RABBITMQ_CONNECTION_RETRY_COUNT:-5}
+      RabbitMQ__RetryInitialDelaySeconds: ${RABBITMQ_RETRY_INITIAL_DELAY_SECONDS:-2}
+      RabbitMQ__QueuesName__MotorcycleNotificationPublishQueue: ${RABBITMQ_QUEUE_PUBLISH:-motorcycle_notification_queue}
+      RabbitMQ__QueuesName__MotorcycleNotificationConsumerQueue: ${RABBITMQ_QUEUE_CONSUMER:-motorcycle_notification_queue}
+      MinIOSettings__Endpoint: minio
+      MinIOSettings__Port: 9000
+      MinIOSettings__AccessKey: ${MINIO_ROOT_USER}
+      MinIOSettings__SecretKey: ${MINIO_ROOT_PASSWORD}
+      MinIOSettings__UseSSL: ${MINIO_USE_SSL:-false}
+      MinIOSettings__BucketLicenseCnh: ${MINIO_LICENSE_BUCKET:-license-cnh}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
     depends_on:
-      - 91612379773_postgres
-      - 91612379773_rabbitmq
-      - 91612379773_minio
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      keycloak:
+        condition: service_started
     entrypoint: ["dotnet", "CoreGoDelivery.Api.dll"]
     networks:
-      - 91612379773_webnet
+      - local-godelivery-core-network
 
 volumes:
-  91612379773_pgdata:
-  91612379773_rabbitmq_data:
-  91612379773_minio_data:
-    name: 91612379773_minio_data
+  local-godelivery-core-postgres:
+    name: local-godelivery-core-postgres
+  local-godelivery-core-rabbitmq:
+    name: local-godelivery-core-rabbitmq
+  local-godelivery-core-minio:
+    name: local-godelivery-core-minio
+  local-godelivery-core-keycloak:
+    name: local-godelivery-core-keycloak

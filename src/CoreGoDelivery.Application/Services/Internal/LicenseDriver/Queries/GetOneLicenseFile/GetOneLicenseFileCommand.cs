@@ -1,5 +1,5 @@
-﻿using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using CoreGoDelivery.Domain.Response.BaseResponse;
+using Mediator;
 using System.Text.Json.Serialization;
 
 namespace CoreGoDelivery.Application.Services.Internal.LicenseDriver.Queries.GetOneLicenseFile;

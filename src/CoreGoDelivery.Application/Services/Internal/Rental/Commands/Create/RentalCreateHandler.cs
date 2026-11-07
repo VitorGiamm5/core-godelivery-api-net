@@ -1,9 +1,11 @@
-﻿using CoreGoDelivery.Application.Extensions;
+using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Application.Services.Internal.Rental.Commands.Create.Common;
+using CoreGoDelivery.Domain.Entities.GoDelivery.Rental;
 using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
+using System.Globalization;
 
 namespace CoreGoDelivery.Application.Services.Internal.Rental.Commands.Create;
 
@@ -24,7 +26,7 @@ public class RentalCreateHandler : IRequestHandler<RentalCreateCommand, ActionRe
         _validator = validator;
     }
 
-    public async Task<ActionResult> Handle(RentalCreateCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(RentalCreateCommand request, CancellationToken cancellationToken)
     {
         request.Id = Guid.NewGuid().ToString();
 
@@ -39,7 +41,17 @@ public class RentalCreateHandler : IRequestHandler<RentalCreateCommand, ActionRe
 
         var plan = await _repositoryPlan.GetById(request.PlanId);
 
-        var calculatedDates = RentalCalculateDatesByPlan.Calculate(plan!);
+        var startDateUtc = ResolveStartDateUtc(request.StartDate);
+        RentalEntity calculatedDates;
+        try
+        {
+            calculatedDates = RentalCalculateDatesByPlan.Calculate(plan!, startDateUtc);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            apiReponse.SetError("Invalid rental dates: plan duration exceeds the supported date range; ");
+            return apiReponse;
+        }
 
         var rental = RentalCreateMappers.MapCreateToEntity(request, calculatedDates);
 
@@ -53,5 +65,19 @@ public class RentalCreateHandler : IRequestHandler<RentalCreateCommand, ActionRe
         apiReponse.SetData(rental);
 
         return apiReponse;
+    }
+
+    private static DateTime ResolveStartDateUtc(string? startDate)
+    {
+        if (string.IsNullOrWhiteSpace(startDate))
+        {
+            return DateTime.UtcNow;
+        }
+
+        var parsedDate = DateTime.Parse(startDate, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+        return parsedDate.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(parsedDate, DateTimeKind.Utc)
+            : parsedDate.ToUniversalTime();
     }
 }

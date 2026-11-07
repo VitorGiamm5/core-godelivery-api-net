@@ -15,9 +15,9 @@ using CoreGoDelivery.Infrastructure.Database;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Polly;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using System.Reflection;
 
 namespace CoreGoDelivery.Application;
 
@@ -29,47 +29,38 @@ public static class SetupApplication
 
         services.BuildMessageValidator();
 
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
-
-        services.Configure<RabbitMQSettings>(options => configuration.GetSection("RabbitMQ").Bind(options));
+        services.AddOptions<RabbitMQSettings>()
+            .Bind(configuration.GetSection("RabbitMQ"))
+            .Validate(settings =>
+                !string.IsNullOrWhiteSpace(settings.Host) &&
+                !string.IsNullOrWhiteSpace(settings.Username) &&
+                !string.IsNullOrWhiteSpace(settings.Password) &&
+                settings.Port is > 0 and <= 65535 &&
+                settings.ConnectionRetryCount > 0 &&
+                settings.RetryInitialDelaySeconds > 0 &&
+                !string.IsNullOrWhiteSpace(settings.QueuesName.MotorcycleNotificationPublishQueue) &&
+                !string.IsNullOrWhiteSpace(settings.QueuesName.MotorcycleNotificationConsumerQueue),
+                "RabbitMQ settings are incomplete or invalid.")
+            .ValidateOnStart();
 
         services.TryAddSingleton<IConnectionFactory>(sp =>
         {
-            var factory = new ConnectionFactory()
+            var settings = sp.GetRequiredService<IOptions<RabbitMQSettings>>().Value;
+            return new ConnectionFactory
             {
-                HostName = configuration["RabbitMQ:Host"],
-                UserName = configuration["RabbitMQ:Username"],
-                Password = configuration["RabbitMQ:Password"],
-                Port = int.Parse(configuration["RabbitMQ:Port"]!)
+                HostName = settings.Host,
+                UserName = settings.Username,
+                Password = settings.Password,
+                Port = settings.Port,
+                AutomaticRecoveryEnabled = true,
+                ClientProvidedName = "CoreGoDelivery"
             };
-
-            return factory;
         });
 
-        services.AddSingleton<IConnection>(sp =>
-        {
-            var factory = sp.GetRequiredService<IConnectionFactory>();
-            var policy = Polly.Policy
-                .Handle<Exception>()
-                .WaitAndRetry(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (exception, timeSpan, retryCount, context) =>
-                {
-                    Console.WriteLine($"Retry {retryCount} for RabbitMQ connection: {exception.Message}");
+        services.AddSingleton<RabbitMQConnectionService>();
+        services.AddHostedService(sp => sp.GetRequiredService<RabbitMQConnectionService>());
 
-                    Console.WriteLine(
-                        $"HostName: '{configuration["RabbitMQ:Host"]}'," +
-                        $"UserName: '{configuration["RabbitMQ:Username"]}'," +
-                        $"Password: '{configuration["RabbitMQ:Password"]}'," +
-                        $"Port: '{configuration["RabbitMQ:Port"]}'");
-
-                    Console.WriteLine(
-                        $"Publish: '{configuration["RabbitMQ:QueuesName:MotorcycleNotificationPublishQueue"]}'," +
-                        $"Consumer: '{configuration["RabbitMQ:QueuesName:MotorcycleNotificationConsumerQueue"]}'");
-
-                });
-            return policy.Execute(() => factory.CreateConnection());
-        });
-
-        services.TryAddTransient<NotificationMotorcyclePublisher>();
+        services.TryAddSingleton<NotificationMotorcyclePublisher>();
         services.AddHostedService<NotificationMotorcycleConsumer>();
 
         return services;
@@ -94,6 +85,7 @@ public static class SetupApplication
     private static void AddDeliverierServices(IServiceCollection services)
     {
         services.TryAddScoped<DeliverierBuildMessageCnh>();
+        services.TryAddScoped<DeliverierBuildMessageCnpj>();
         services.TryAddScoped<DeliverierBuildMessageDeliverierCreate>();
         services.TryAddScoped<DeliverierCreateValidator>();
         services.TryAddScoped<LicenseDriverValidator>();

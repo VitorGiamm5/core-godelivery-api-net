@@ -6,14 +6,14 @@ namespace CoreGoDelivery.Domain.Entities.GoDelivery.Motorcycle;
 
 public class MotorcycleEntity : BaseEntity
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
     public int YearManufacture { get; set; }
-    public string PlateNormalized { get; set; }
+    public string PlateNormalized { get; set; } = null!;
 
     #region relationships
 
     [JsonIgnore]
-    public string MotorcycleModelId { get; set; }
+    public string MotorcycleModelId { get; set; } = null!;
 
     [JsonIgnore]
     public MotorcycleModelEntity? MotorcycleModel { get; set; }

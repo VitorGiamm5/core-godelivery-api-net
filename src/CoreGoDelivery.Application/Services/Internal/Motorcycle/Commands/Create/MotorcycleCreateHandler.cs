@@ -1,10 +1,10 @@
-﻿using CoreGoDelivery.Application.Extensions;
+using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Commons;
 using CoreGoDelivery.Application.Services.Internal.NotificationMotorcycle.Commands.PublishNotification;
 using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Create;
 
@@ -25,7 +25,7 @@ public class MotorcycleCreateHandler : IRequestHandler<MotorcycleCreateCommand, 
         _notification = notification;
     }
 
-    public async Task<ActionResult> Handle(MotorcycleCreateCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(MotorcycleCreateCommand request, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 
@@ -54,7 +54,7 @@ public class MotorcycleCreateHandler : IRequestHandler<MotorcycleCreateCommand, 
         {
             var notification = MotorcycleServiceMappers.MapNotificationDto(motorcycle);
 
-            _notification.PublishMotorcycle(notification);
+            await _notification.PublishMotorcycleAsync(notification, cancellationToken);
         }
 
         apiReponse.SetData(motorcycle);

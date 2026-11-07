@@ -1,5 +1,5 @@
-﻿using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using CoreGoDelivery.Domain.Response.BaseResponse;
+using Mediator;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 
@@ -14,8 +14,8 @@ public sealed class MotorcycleCreateCommand : IRequest<ActionResult>
     public int YearManufacture { get; set; }
 
     [DefaultValue("Sport")]
-    public string ModelName { get; set; }
+    public string ModelName { get; set; } = string.Empty;
 
     [DefaultValue("CDX-0101")]
-    public string Plate { get; set; }
+    public string Plate { get; set; } = string.Empty;
 }

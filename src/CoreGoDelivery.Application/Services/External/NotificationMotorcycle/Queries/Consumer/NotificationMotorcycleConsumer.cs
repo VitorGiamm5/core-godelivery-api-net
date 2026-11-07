@@ -1,119 +1,145 @@
-﻿using CoreGoDelivery.Domain.Entities.GoDelivery.NotificationMotorcycle;
+using CoreGoDelivery.Domain.Entities.GoDelivery.NotificationMotorcycle;
 using CoreGoDelivery.Domain.NotificationMotorcycle;
+using CoreGoDelivery.Domain.RabbitMQ;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
-using Polly;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using RabbitMQ.Client.Exceptions;
-using System.Text;
+using System.Text.Json;
 
 namespace CoreGoDelivery.Application.Services.External.NotificationMotorcycle.Queries.Consumer;
 
-public class NotificationMotorcycleConsumer : BackgroundService
+public sealed class NotificationMotorcycleConsumer : BackgroundService
 {
-    private readonly IConnection _connection;
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private readonly RabbitMQConnectionService _connectionService;
     private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly string _consumerQueueName;
-    private IModel? _channel;
+    private readonly RabbitMQSettings _settings;
+    private readonly ILogger<NotificationMotorcycleConsumer> _logger;
+    private IChannel? _channel;
 
     public NotificationMotorcycleConsumer(
-        IConnection connection,
+        RabbitMQConnectionService connectionService,
         IServiceScopeFactory serviceScopeFactory,
-        IConfiguration configuration)
+        IOptions<RabbitMQSettings> settings,
+        ILogger<NotificationMotorcycleConsumer> logger)
     {
-        _connection = connection;
+        _connectionService = connectionService;
         _serviceScopeFactory = serviceScopeFactory;
-        _consumerQueueName = configuration["RabbitMQ:QueuesName:MotorcycleNotificationConsumerQueue"]
-            ?? throw new BrokerUnreachableException(new Exception("RabbitMQ queue name is not configured."));
+        _settings = settings.Value;
+        _logger = logger;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var retryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                onRetry: (exception, timespan, attempt, context) =>
+        try
+        {
+            _channel = await _connectionService.Connection.CreateChannelAsync(cancellationToken: stoppingToken);
+            await _channel.QueueDeclareAsync(
+                queue: _settings.QueuesName.MotorcycleNotificationConsumerQueue,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null,
+                cancellationToken: stoppingToken);
+
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            consumer.ReceivedAsync += HandleMessageAsync;
+
+            await _channel.BasicConsumeAsync(
+                queue: _settings.QueuesName.MotorcycleNotificationConsumerQueue,
+                autoAck: false,
+                consumer: consumer,
+                cancellationToken: stoppingToken);
+
+            _logger.LogInformation(
+                "RabbitMQ consumer started for queue {QueueName}",
+                _settings.QueuesName.MotorcycleNotificationConsumerQueue);
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (_channel is not null)
+            {
+                if (_channel.IsOpen)
                 {
-                    Console.WriteLine($"{_connection.Endpoint}");
-                    Console.WriteLine($"Retry {attempt}: Connection to RabbitMQ failed. Exception: {exception.Message}. Next attempt in {timespan}.");
-                });
+                    await _channel.CloseAsync();
+                }
 
-        retryPolicy.Execute(() =>
-        {
-            _channel = _connection.CreateModel();
-            _channel.QueueDeclare(queue: _consumerQueueName,
-                                  durable: true,
-                                  exclusive: false,
-                                  autoDelete: false,
-                                  arguments: null);
-
-            Console.WriteLine($"Queue {_consumerQueueName} declared successfully.");
-        });
-
-        StartConsumer(stoppingToken);
-
-        return Task.CompletedTask;
+                await _channel.DisposeAsync();
+                _channel = null;
+            }
+        }
     }
 
-    private void StartConsumer(CancellationToken stoppingToken)
+    private async Task HandleMessageAsync(object sender, BasicDeliverEventArgs eventArgs)
     {
-        if (_channel == null)
+        var channel = _channel;
+        if (channel is null)
         {
-            throw new InvalidOperationException("Channel is not initialized.");
+            return;
         }
 
-        var consumer = new EventingBasicConsumer(_channel);
-
-        consumer.Received += async (model, ea) =>
+        NotificationMotorcycleDto? notification;
+        try
         {
-            var body = ea.Body.ToArray();
-            var message = Encoding.UTF8.GetString(body);
+            notification = JsonSerializer.Deserialize<NotificationMotorcycleDto>(
+                eventArgs.Body.ToArray(),
+                SerializerOptions);
 
-            Console.WriteLine($"Message received from queue {_consumerQueueName}: {message}");
-
-            var notification = JsonConvert.DeserializeObject<NotificationMotorcycleDto>(message)!;
-
-            var entityNotification = new NotificationMotorcycleEntity
+            if (notification is null)
             {
-                Id = notification.Id,
-                IdMotorcycle = notification.MotorcycleId,
-                YearManufacture = notification.YearManufacture,
-                DateCreated = notification.DateCreated,
-                CreatedBy = notification.CreatedBy
-            };
-
-            using var scope = _serviceScopeFactory.CreateScope();
-
-            var notificationRepository = scope.ServiceProvider.GetRequiredService<INotificationMotorcycleRepository>();
-            try
-            {
-                await notificationRepository.CreateAsync(entityNotification);
-                Console.WriteLine("Message processed and saved to database successfully.");
+                throw new JsonException("The message payload was empty.");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving message to database: {ex.Message}");
-            }
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogWarning(
+                "Discarding an invalid message from queue {QueueName}: {ExceptionType}",
+                _settings.QueuesName.MotorcycleNotificationConsumerQueue,
+                exception.GetType().Name);
+            await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false);
+            return;
+        }
+
+        var entityNotification = new NotificationMotorcycleEntity
+        {
+            Id = notification.Id,
+            IdMotorcycle = notification.MotorcycleId,
+            YearManufacture = notification.YearManufacture,
+            DateCreated = notification.DateCreated,
+            CreatedBy = notification.CreatedBy
         };
 
-        _channel.BasicConsume(queue: _consumerQueueName,
-                              autoAck: true,
-                              consumer: consumer);
+        try
+        {
+            await using var scope = _serviceScopeFactory.CreateAsyncScope();
+            var notificationRepository = scope.ServiceProvider.GetRequiredService<INotificationMotorcycleRepository>();
+            await notificationRepository.CreateAsync(entityNotification);
+            await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                "Failed to persist a notification from queue {QueueName}; requeuing message ({ExceptionType})",
+                _settings.QueuesName.MotorcycleNotificationConsumerQueue,
+                exception.GetType().Name);
 
-        Console.WriteLine($"Consumer started on queue {_consumerQueueName}.");
-    }
-
-    public override void Dispose()
-    {
-        _channel?.Close();
-        _connection?.Close();
-        base.Dispose();
+            if (channel.IsOpen)
+            {
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: true);
+            }
+        }
     }
 }
-
