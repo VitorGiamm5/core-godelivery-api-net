@@ -18,7 +18,7 @@ namespace CoreGoDelivery.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dbgodelivery")
-                .HasAnnotation("ProductVersion", "8.0.10")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -58,6 +58,10 @@ namespace CoreGoDelivery.Infrastructure.Migrations
                         .HasColumnName("ID_FK_LICENSE_DRIVER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Cnpj")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tb_deliverier_cnpj");
 
                     b.HasIndex("LicenceDriverId");
 
@@ -104,7 +108,47 @@ namespace CoreGoDelivery.Infrastructure.Migrations
                     b.ToTable("tb_licenceDriver", "dbgodelivery");
                 });
 
-            modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.ModelMotorcycle.ModelMotorcycleEntity", b =>
+            modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.Motorcycle.MotorcycleEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("ID_MOTORCYCLE");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("CREATED_BY");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("DATE_CREATED");
+
+                    b.Property<string>("MotorcycleModelId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ID_FK_MODEL_MOTORCYCLE");
+
+                    b.Property<string>("PlateNormalized")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("PLATE_NORMALIZED");
+
+                    b.Property<int>("YearManufacture")
+                        .HasColumnType("integer")
+                        .HasColumnName("YEAR_MANUFACTURE");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MotorcycleModelId");
+
+                    b.HasIndex("PlateNormalized")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tb_motorcycle_plate_normalized");
+
+                    b.ToTable("tb_motorcycle", "dbgodelivery");
+                });
+
+            modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.MotorcycleModel.MotorcycleModelEntity", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("text")
@@ -132,42 +176,6 @@ namespace CoreGoDelivery.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("tb_modelMotorcycle", "dbgodelivery");
-                });
-
-            modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.Motorcycle.MotorcycleEntity", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("text")
-                        .HasColumnName("ID_MOTORCYCLE");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("CREATED_BY");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("DATE_CREATED");
-
-                    b.Property<string>("ModelMotorcycleId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ID_FK_MODEL_MOTORCYCLE");
-
-                    b.Property<string>("PlateNormalized")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("PLATE_NORMALIZED");
-
-                    b.Property<int>("YearManufacture")
-                        .HasColumnType("integer")
-                        .HasColumnName("YEAR_MANUFACTURE");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ModelMotorcycleId");
-
-                    b.ToTable("tb_motorcycle", "dbgodelivery");
                 });
 
             modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.NotificationMotorcycle.NotificationMotorcycleEntity", b =>
@@ -246,7 +254,10 @@ namespace CoreGoDelivery.Infrastructure.Migrations
 
                     b.HasIndex("DeliverierId");
 
-                    b.HasIndex("MotorcycleId");
+                    b.HasIndex("MotorcycleId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_tb_rental_active_motorcycle")
+                        .HasFilter("\"DATE_RETURNED_TO_BASE\" IS NULL");
 
                     b.HasIndex("RentalPlanId");
 
@@ -297,13 +308,13 @@ namespace CoreGoDelivery.Infrastructure.Migrations
 
             modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.Motorcycle.MotorcycleEntity", b =>
                 {
-                    b.HasOne("CoreGoDelivery.Domain.Entities.GoDelivery.ModelMotorcycle.ModelMotorcycleEntity", "ModelMotorcycle")
+                    b.HasOne("CoreGoDelivery.Domain.Entities.GoDelivery.MotorcycleModel.MotorcycleModelEntity", "MotorcycleModel")
                         .WithMany()
-                        .HasForeignKey("ModelMotorcycleId")
+                        .HasForeignKey("MotorcycleModelId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ModelMotorcycle");
+                    b.Navigation("MotorcycleModel");
                 });
 
             modelBuilder.Entity("CoreGoDelivery.Domain.Entities.GoDelivery.Rental.RentalEntity", b =>

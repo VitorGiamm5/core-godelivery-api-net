@@ -1,6 +1,6 @@
-﻿using CoreGoDelivery.Domain.Repositories.GoDelivery;
+using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.Rental.Queries.GetOne;
 
@@ -14,7 +14,7 @@ public class RentalGetOneHandler : IRequestHandler<RentalGetOneCommand, ActionRe
         _repositoryRental = repositoryRental;
     }
 
-    public async Task<ActionResult> Handle(RentalGetOneCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(RentalGetOneCommand request, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 
@@ -31,7 +31,7 @@ public class RentalGetOneHandler : IRequestHandler<RentalGetOneCommand, ActionRe
 
         var rentalDto = RentalGetOneMappers.RentalEntityToDto(rental);
 
-        apiReponse.SetData(rental);
+        apiReponse.SetData(rentalDto);
 
         return apiReponse;
     }

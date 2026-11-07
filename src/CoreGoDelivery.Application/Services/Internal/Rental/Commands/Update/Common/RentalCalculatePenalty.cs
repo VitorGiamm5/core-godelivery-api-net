@@ -1,54 +1,71 @@
 ﻿using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Domain.Consts;
 using CoreGoDelivery.Domain.Entities.GoDelivery.Rental;
-using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
-using CoreGoDelivery.Domain.Response.BaseResponse;
 
 namespace CoreGoDelivery.Application.Services.Internal.Rental.Commands.Update.Common;
 
 public static class RentalCalculatePenalty
 {
-    public static ActionResult Calculate(DateTime returnedToBaseDate, RentalEntity? rental)
+    public static object Calculate(DateTime returnedToBaseDate, RentalEntity rental)
     {
-        var apiResponse = new ActionResult();
+        TimeSpan delay = returnedToBaseDate - rental.EstimatedReturnDate;
 
-        if (rental == null)
+        if (delay == TimeSpan.Zero)
         {
-            apiResponse.SetError(nameof(returnedToBaseDate).AppendError(AdditionalMessageEnum.NotFound));
-
-            return apiResponse;
+            return CalculateCharge(
+                returnedToBaseDate,
+                rental,
+                RentalServiceConst.MESSAGE_RETURNED_TO_BASE_SUCCESS,
+                penaltyValue: 0.0);
         }
 
-        TimeSpan buildDiffDays = returnedToBaseDate - rental!.EstimatedReturnDate;
-
-        int diffDays = buildDiffDays.Days;
-
-        if (diffDays == 0)
+        if (delay > TimeSpan.Zero)
         {
-            apiResponse.SetData(new { Message = RentalServiceConst.MESSAGE_RETURNED_TO_BASE_SUCCESS, Value = 0.0 });
+            var startedDaysLate = (int)Math.Ceiling(delay.TotalDays);
+            var valueToPay = RentalExpiredDateToReturn.Calculate(startedDaysLate);
 
-            return apiResponse;
+            return CalculateCharge(
+                returnedToBaseDate,
+                rental,
+                RentalServiceConst.MESSAGE_RETURNED_AFTER,
+                valueToPay);
         }
 
-        if (diffDays < 0)
+        if (delay < TimeSpan.Zero)
         {
-            var valueToPay = RentalReturnerBeforeExpected.Calculate(rental, diffDays);
+            var fullDaysEarly = delay.Days;
+            var valueToPay = RentalReturnerBeforeExpected.Calculate(rental, fullDaysEarly);
 
-            apiResponse.SetData(new { Message = RentalServiceConst.MESSAGE_RETURNED_BEFORE, Value = valueToPay });
-
-            return apiResponse;
-        }
-        else if (diffDays > 0)
-        {
-            var valueToPay = RentalExpiredDateToReturn.Calculate(diffDays);
-
-            apiResponse.SetData(new { Menssage = RentalServiceConst.MESSAGE_RETURNED_AFTER, Value = valueToPay });
-
-            return apiResponse;
+            return CalculateCharge(
+                returnedToBaseDate,
+                rental,
+                RentalServiceConst.MESSAGE_RETURNED_BEFORE,
+                valueToPay);
         }
 
-        apiResponse.SetError(returnedToBaseDate.ToString().AppendError(AdditionalMessageEnum.InvalidFormat));
+        throw new InvalidOperationException("The return penalty could not be calculated.");
+    }
 
-        return apiResponse;
+    private static object CalculateCharge(
+        DateTime returnedToBaseDate,
+        RentalEntity rental,
+        string message,
+        double penaltyValue)
+    {
+        var planDays = rental.RentalPlan!.DaysQuantity;
+        var chargeableDays = returnedToBaseDate < rental.EstimatedReturnDate
+            ? planDays - (int)Math.Ceiling((rental.EstimatedReturnDate - returnedToBaseDate).TotalDays)
+            : planDays + (returnedToBaseDate - rental.EstimatedReturnDate).Days;
+        chargeableDays = Math.Max(0, chargeableDays);
+        var rentalAmount = rental.RentalPlan!.DayliCost * chargeableDays;
+
+        return new
+        {
+            Message = message,
+            Value = penaltyValue,
+            ChargeableDays = chargeableDays,
+            RentalAmount = rentalAmount,
+            TotalCharge = rentalAmount + penaltyValue
+        };
     }
 }

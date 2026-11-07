@@ -40,7 +40,7 @@ public class LicenseDriverValidator
 
         #region Verify if the license driver exist
 
-        var licenseDriver = _repositoryLicense.GetOneById(command.IdLicenseNumber!);
+        var licenseDriver = await _repositoryLicense.GetOneById(command.IdLicenseNumber!);
 
         if (licenseDriver == null)
         {
@@ -53,21 +53,24 @@ public class LicenseDriverValidator
 
         #region Verity file size
 
-        if (command.LicenseImageBase64.LongLength < 10)
+        var imageBytes = command.LicenseImageBase64;
+        if (imageBytes is null || imageBytes.Length < 10)
         {
             message.Append(nameof(command.LicenseImageBase64).AppendError());
+            return message;
         }
 
-        if (command.LicenseImageBase64.Length > FAULT_FILE_SIZE_LIMIT_MB * 1024 * 1024)
+        if (imageBytes.Length > FAULT_FILE_SIZE_LIMIT_MB * 1024 * 1024)
         {
             message.Append(nameof(command.LicenseImageBase64).AppendError(AdditionalMessageEnum.FileSizeInvalid));
+            return message;
         }
 
         #endregion
 
         #region verity file extension
 
-        var (isValid, errorMessage, _) = ImageValidateExtensionFile.Build(command.LicenseImageBase64);
+        var (isValid, errorMessage, _) = ImageValidateExtensionFile.Build(imageBytes);
 
         if (!isValid)
         {

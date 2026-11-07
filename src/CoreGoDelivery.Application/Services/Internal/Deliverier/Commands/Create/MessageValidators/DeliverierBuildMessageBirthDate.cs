@@ -10,26 +10,23 @@ public static class DeliverierBuildMessageBirthDate
     {
         var paramName = nameof(data.BirthDate);
 
-        if (string.IsNullOrWhiteSpace(data.BirthDate.ToString()))
+        if (data.BirthDate == default)
         {
             message.Append(paramName.AppendError());
+            return;
         }
-        else
+
+        var today = DateTime.UtcNow.Date;
+        var age = today.Year - data.BirthDate.Year;
+
+        if (data.BirthDate.Date > today.AddYears(-age))
         {
-            if (data.BirthDate is DateTime birthDate)
-            {
-                var age = DateTime.Today.Year - birthDate.Year;
+            age--;
+        }
 
-                if (birthDate.Date > DateTime.Today.AddYears(-age))
-                {
-                    age--;
-                }
-
-                if (age < 18)
-                {
-                    message.Append(DeliverierServiceConst.MESSAGE_INVALID_AGE);
-                }
-            }
+        if (age < 18)
+        {
+            message.Append(DeliverierServiceConst.MESSAGE_INVALID_AGE);
         }
     }
 }

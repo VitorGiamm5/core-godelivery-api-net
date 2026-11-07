@@ -1,13 +1,13 @@
-﻿using CoreGoDelivery.Api.Controllers.Base;
+using CoreGoDelivery.Api.Controllers.Base;
 using CoreGoDelivery.Application.Services.Internal.Deliverier.Commands.Create;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CoreGoDelivery.Api.Controllers;
 
 [Route("api/deliveriers")]
 [ApiController]
-public class DeliveriersController(IMediator _mediator) : BaseApiController
+public class DeliveriersController(IMediator _mediator, ILogger<BaseApiController> logger) : BaseApiController(logger)
 {
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] DeliverierCreateCommand request)

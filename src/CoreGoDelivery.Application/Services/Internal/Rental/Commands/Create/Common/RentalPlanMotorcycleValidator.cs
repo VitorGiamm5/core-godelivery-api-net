@@ -2,6 +2,7 @@
 using CoreGoDelivery.Domain.Entities.GoDelivery.RentalPlan;
 using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
 using System.Text;
+using System.Globalization;
 
 namespace CoreGoDelivery.Application.Services.Internal.Rental.Commands.Create.Common;
 
@@ -11,50 +12,71 @@ public static class RentalPlanMotorcycleValidator
     {
         var message = new StringBuilder();
 
-        var refence = RentalCalculateDatesByPlan.Calculate(plan);
+        var hasStartDate = !string.IsNullOrWhiteSpace(data.StartDate);
+        var hasEndDate = !string.IsNullOrWhiteSpace(data.EndDate);
+        var hasEstimatedReturnDate = !string.IsNullOrWhiteSpace(data.EstimatedReturnDate);
 
-        #region StartDate validate
+        var hasValidStartDate = TryParseDate(nameof(data.StartDate), data.StartDate, message, out var startDate);
+        var hasValidEndDate = TryParseDate(nameof(data.EndDate), data.EndDate, message, out var endDate);
+        var hasValidEstimatedReturnDate = TryParseDate(nameof(data.EstimatedReturnDate), data.EstimatedReturnDate, message, out var estimatedReturnDate);
 
-        if (!string.IsNullOrEmpty(data.StartDate))
+        if (plan.DaysQuantity <= 0)
         {
-            data.StartDate = refence.StartDate.ToString();
-
-            if (DateTime.Parse(data.StartDate) != refence.StartDate)
-            {
-                message.Append(data.StartDate.ToString().AppendError(AdditionalMessageEnum.InvalidDate));
-            }
+            message.Append("Invalid rental plan: duration must be greater than zero; ");
         }
 
-        #endregion
-
-        #region EndDate validate
-
-        if (!string.IsNullOrEmpty(data.EndDate))
+        if ((hasEndDate || hasEstimatedReturnDate) && !hasStartDate)
         {
-            data.EndDate = refence.EndDate.ToString();
-
-            if (DateTime.Parse(data.EndDate) != refence.EndDate)
-            {
-                message.Append(data.EndDate.ToString().AppendError(AdditionalMessageEnum.InvalidDate));
-            }
+            message.Append("Invalid rental dates: StartDate is required when EndDate or EstimatedReturnDate is supplied; ");
         }
 
-        #endregion
-
-        #region EstimatedReturnDate validate
-
-        if (!string.IsNullOrEmpty(data.EstimatedReturnDate))
+        if (data.ReturnedToBaseDate.HasValue)
         {
-            data.StartDate = refence.EstimatedReturnDate.ToString();
-
-            if (DateTime.Parse(data.EstimatedReturnDate) != refence.EstimatedReturnDate)
-            {
-                message.Append(data.EstimatedReturnDate.ToString().AppendError(AdditionalMessageEnum.InvalidDate));
-            }
+            message.Append("Invalid rental dates: ReturnedToBaseDate must be recorded through the return-to-base operation; ");
         }
 
-        #endregion
+        if (hasValidStartDate && plan.DaysQuantity > 0)
+        {
+            try
+            {
+                var expectedReturnDate = startDate.AddDays(plan.DaysQuantity);
+                if (hasValidEndDate && endDate != expectedReturnDate)
+                {
+                    message.Append($"Invalid field: {nameof(data.EndDate)} must equal StartDate plus {plan.DaysQuantity} plan days; ");
+                }
+
+                if (hasValidEstimatedReturnDate && estimatedReturnDate != expectedReturnDate)
+                {
+                    message.Append($"Invalid field: {nameof(data.EstimatedReturnDate)} must equal StartDate plus {plan.DaysQuantity} plan days; ");
+                }
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                message.Append("Invalid rental dates: StartDate and plan duration exceed the supported date range; ");
+            }
+        }
 
         return message;
+    }
+
+    private static bool TryParseDate(string fieldName, string? value, StringBuilder message, out DateTimeOffset parsedDate)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            parsedDate = default;
+            return false;
+        }
+
+        if (DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out parsedDate))
+        {
+            return true;
+        }
+
+        message.Append(fieldName.AppendError(AdditionalMessageEnum.InvalidDate));
+        return false;
     }
 }

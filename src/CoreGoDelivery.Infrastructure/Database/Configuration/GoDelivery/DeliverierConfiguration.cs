@@ -14,6 +14,9 @@ public class DeliverierConfiguration : IEntityTypeConfiguration<DeliverierEntity
         entity.Property(e => e.Id).HasColumnName("ID_DELIVERIER");
         entity.Property(e => e.FullName).HasColumnName("FULL_NAME");
         entity.Property(e => e.Cnpj).HasColumnName("CNPJ");
+        entity.HasIndex(e => e.Cnpj)
+            .IsUnique()
+            .HasDatabaseName("UX_tb_deliverier_cnpj");
         entity.Property(e => e.BirthDate).HasColumnName("DATE_BIRTH").HasColumnType("timestamptz");
         entity.Property(e => e.LicenceDriverId).HasColumnName("ID_FK_LICENSE_DRIVER");
 

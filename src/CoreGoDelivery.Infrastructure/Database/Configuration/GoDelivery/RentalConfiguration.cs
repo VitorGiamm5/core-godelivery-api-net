@@ -19,6 +19,10 @@ public class RentalConfiguration : IEntityTypeConfiguration<RentalEntity>
         entity.Property(e => e.DeliverierId).HasColumnName("ID_FK_DELIVERIER");
         entity.Property(e => e.MotorcycleId).HasColumnName("ID_FK_MOTORCYCLE").IsRequired(false);
         entity.Property(e => e.RentalPlanId).HasColumnName("ID_FK_RENTAL_PLAN");
+        entity.HasIndex(e => e.MotorcycleId)
+            .IsUnique()
+            .HasFilter("\"DATE_RETURNED_TO_BASE\" IS NULL")
+            .HasDatabaseName("UX_tb_rental_active_motorcycle");
 
         entity.Property(e => e.DateCreated).HasColumnName("DATE_CREATED").HasColumnType("timestamptz");
         entity.Property(e => e.CreatedBy).HasColumnName("CREATED_BY");

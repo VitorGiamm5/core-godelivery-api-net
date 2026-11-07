@@ -6,18 +6,18 @@ namespace CoreGoDelivery.Domain.Entities.GoDelivery.Deliverier;
 
 public sealed class DeliverierEntity : BaseEntity
 {
-    public string Id { get; set; }
-    public string FullName { get; set; }
-    public string Cnpj { get; set; }
+    public string Id { get; set; } = null!;
+    public string FullName { get; set; } = null!;
+    public string Cnpj { get; set; } = null!;
     public DateTime BirthDate { get; set; }
 
     #region relationships
 
     [JsonIgnore]
-    public string LicenceDriverId { get; set; }
+    public string LicenceDriverId { get; set; } = null!;
 
     [JsonIgnore]
-    public LicenceDriverEntity LicenceDriver { get; set; }
+    public LicenceDriverEntity LicenceDriver { get; set; } = null!;
 
     #endregion
 }

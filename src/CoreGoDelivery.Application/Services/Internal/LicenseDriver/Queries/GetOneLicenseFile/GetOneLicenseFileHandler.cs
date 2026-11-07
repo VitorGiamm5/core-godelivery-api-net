@@ -1,9 +1,9 @@
-﻿using CoreGoDelivery.Application.Extensions;
+using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Domain.Enums.ServiceErrorMessage;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
 using CoreGoDelivery.Infrastructure.FileBucket.FileStorage;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.LicenseDriver.Queries.GetOneLicenseFile;
 
@@ -23,7 +23,7 @@ public class GetOneLicenseFileHandler : IRequestHandler<GetOneLicenseFileCommand
         _fileService = fileService;
     }
 
-    public async Task<ActionResult> Handle(GetOneLicenseFileCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(GetOneLicenseFileCommand request, CancellationToken cancellationToken)
     {
         var apiResponse = new ActionResult();
 
@@ -33,6 +33,7 @@ public class GetOneLicenseFileHandler : IRequestHandler<GetOneLicenseFileCommand
         if (deliverier == null)
         {
             apiResponse.SetError("deliverier".AppendError(AdditionalMessageEnum.NotFound));
+            return apiResponse;
         }
 
         var license = await _repositoryLicence.GetOneById(request.Id);
@@ -40,32 +41,26 @@ public class GetOneLicenseFileHandler : IRequestHandler<GetOneLicenseFileCommand
         if (license == null)
         {
             apiResponse.SetError("license".AppendError(AdditionalMessageEnum.NotFound));
+            return apiResponse;
         }
 
-        if (string.IsNullOrEmpty(license?.ImageUrlReference))
+        if (string.IsNullOrEmpty(license.ImageUrlReference) || license.IsPendingImage())
         {
             apiResponse.SetError("ImageUrlReference".AppendError(AdditionalMessageEnum.NotFound));
+            return apiResponse;
         }
 
         #endregion
 
-        try
+        var base64File = await _fileService.GetFileAsync(license.ImageUrlReference);
+
+        if (base64File == null)
         {
-            var base64File = await _fileService.GetFileAsync(license!.ImageUrlReference);
-
-            if (base64File == null)
-            {
-                apiResponse.SetError("base64File".AppendError(AdditionalMessageEnum.NotFound));
-
-                return apiResponse;
-            }
-
-            apiResponse.SetData(new { licenseImageBase64 = base64File });
+            apiResponse.SetError("base64File".AppendError(AdditionalMessageEnum.NotFound));
+            return apiResponse;
         }
-        catch (Exception ex)
-        {
-            apiResponse.SetError(ex.Message);
-        }
+
+        apiResponse.SetData(new { licenseImageBase64 = base64File });
 
         return apiResponse;
     }

@@ -1,8 +1,8 @@
-﻿using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 namespace CoreGoDelivery.Api.Swagger;
 
@@ -10,17 +10,26 @@ public sealed class DefaultValuesOperation : IOperationFilter
 {
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
+        if (operation.Parameters is null || context.MethodInfo?.DeclaringType is not { } declaringType)
+        {
+            return;
+        }
+
         foreach (var parameter in operation.Parameters)
         {
-            var property = context.MethodInfo?.DeclaringType?.GetProperty(parameter.Name, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-
-            if (property != null)
+            if (string.IsNullOrWhiteSpace(parameter.Name))
             {
-                var defaultvalueAttribute = property?.GetCustomAttribute<DefaultValueAttribute>();
-                if (defaultvalueAttribute != null)
-                {
-                    parameter.Schema.Default = new OpenApiString(defaultvalueAttribute?.Value?.ToString());
-                }
+                continue;
+            }
+
+            var property = declaringType.GetProperty(
+                parameter.Name,
+                BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+
+            var defaultValue = property?.GetCustomAttribute<DefaultValueAttribute>()?.Value;
+            if (defaultValue is not null && parameter.Schema is OpenApiSchema schema)
+            {
+                schema.Default = JsonValue.Create(defaultValue.ToString());
             }
         }
     }

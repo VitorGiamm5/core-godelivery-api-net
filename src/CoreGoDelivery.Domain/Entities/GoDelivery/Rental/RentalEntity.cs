@@ -8,7 +8,7 @@ namespace CoreGoDelivery.Domain.Entities.GoDelivery.Rental;
 
 public sealed class RentalEntity : BaseEntity
 {
-    public string Id { get; set; }
+    public string Id { get; set; } = null!;
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public DateTime EstimatedReturnDate { get; set; }

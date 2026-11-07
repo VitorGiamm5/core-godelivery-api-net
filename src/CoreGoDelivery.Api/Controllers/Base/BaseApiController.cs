@@ -1,6 +1,7 @@
 ﻿using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Domain.Consts;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using ActionResult = CoreGoDelivery.Domain.Response.BaseResponse.ActionResult;
 
@@ -11,12 +12,22 @@ namespace CoreGoDelivery.Api.Controllers.Base;
 [Consumes("application/json")]
 public class BaseApiController : ControllerBase
 {
+    private readonly ILogger<BaseApiController> _logger;
+
+    protected BaseApiController(ILogger<BaseApiController> logger)
+    {
+        _logger = logger;
+    }
+
     protected new IActionResult Response(ActionResult response)
     {
         var data = response.GetData();
 
         if (response.HasError())
         {
+            _logger.LogInformation(
+                "API operation rejected by validation or a business rule. TraceId={TraceIdentifier}",
+                HttpContext.TraceIdentifier);
             return StatusCode((int)HttpStatusCode.BadRequest, response.GetError());
         }
         else if (response.HasData())
@@ -27,13 +38,18 @@ public class BaseApiController : ControllerBase
         return StatusCode((int)HttpStatusCode.NotFound);
     }
 
-    protected IActionResult ResponseError(object exception)
+    protected IActionResult ResponseError(Exception exception)
     {
+        _logger.LogError(
+            exception,
+            "API operation failed with {ExceptionType} TraceId={TraceIdentifier}",
+            exception.GetType().Name,
+            HttpContext.TraceIdentifier);
+
         var apiResponse = new ActionResult();
+        apiResponse.SetError(CommomMessagesConst.MESSAGE_INTERNAL_ERROR);
 
-        apiResponse.SetError(CommomMessagesConst.MESSAGE_INVALID_DATA, exception);
-
-        return StatusCode((int)HttpStatusCode.InternalServerError, apiResponse);
+        return StatusCode((int)HttpStatusCode.InternalServerError, apiResponse.GetError());
     }
 
     public static string IdBuild(string? id)

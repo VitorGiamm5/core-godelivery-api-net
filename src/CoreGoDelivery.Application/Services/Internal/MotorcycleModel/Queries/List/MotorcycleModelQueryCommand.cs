@@ -1,5 +1,5 @@
-﻿using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using CoreGoDelivery.Domain.Response.BaseResponse;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.MotorcycleModel.Queries.List;
 

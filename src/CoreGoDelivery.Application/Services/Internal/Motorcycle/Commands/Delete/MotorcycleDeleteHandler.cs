@@ -1,6 +1,6 @@
-﻿using CoreGoDelivery.Domain.Repositories.GoDelivery;
+using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Delete;
 
@@ -18,7 +18,7 @@ public class MotorcycleDeleteHandler : IRequestHandler<MotorcycleDeleteCommand, 
         _validator = validator;
     }
 
-    public async Task<ActionResult> Handle(MotorcycleDeleteCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(MotorcycleDeleteCommand request, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
         apiReponse.SetError(await _validator.BuilderDeleteValidator(request.Id));
@@ -28,7 +28,14 @@ public class MotorcycleDeleteHandler : IRequestHandler<MotorcycleDeleteCommand, 
             return apiReponse;
         }
 
-        _ = await _repositoryMotorcycle.DeleteById(request.Id);
+        var deleted = await _repositoryMotorcycle.DeleteById(request.Id);
+        if (!deleted)
+        {
+            apiReponse.SetError("motorcycleId is invalid");
+            return apiReponse;
+        }
+
+        apiReponse.SetData(new { id = request.Id, deleted = true });
 
         return apiReponse!;
     }

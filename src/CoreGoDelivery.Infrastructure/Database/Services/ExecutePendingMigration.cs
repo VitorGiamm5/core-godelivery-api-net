@@ -5,30 +5,16 @@ namespace CoreGoDelivery.Infrastructure.Database.Services;
 
 public static class ExecutePendingMigration
 {
-    public static void Execute(IServiceCollection services)
+    public static async Task ExecuteAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
-        var serviceProvider = services.BuildServiceProvider();
-
-        using var scope = serviceProvider.CreateScope();
+        await using var scope = services.CreateAsyncScope();
 
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        try
+        var migrations = await dbContext.Database.GetPendingMigrationsAsync(cancellationToken);
+        if (migrations.Any())
         {
-            var migrations = dbContext.Database.GetPendingMigrations();
-
-            if (migrations.Any())
-            {
-                Console.WriteLine($"Apply migrations success");
-
-                dbContext.Database.MigrateAsync().Wait();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error to apply migrations: {ex.Message}");
-
-            throw;
+            await dbContext.Database.MigrateAsync(cancellationToken);
         }
     }
 }

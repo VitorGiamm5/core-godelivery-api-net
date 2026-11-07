@@ -1,43 +1,49 @@
-﻿using System.Text.Json;
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace CoreGoDelivery.Api.Conveters;
 
-public class CustomDateTimeConverter : JsonConverter<DateTime?>
+public sealed class CustomDateTimeConverter : JsonConverter<DateTime?>
 {
-    private readonly string _dateFormat;
-
-    public CustomDateTimeConverter(string dateFormat)
-    {
-        _dateFormat = dateFormat;
-    }
     public override void Write(Utf8JsonWriter writer, DateTime? date, JsonSerializerOptions options)
     {
-        if (date != null)
+        if (date is null)
         {
-            writer.WriteStringValue(date.Value.ToUniversalTime().ToString(_dateFormat));
+            writer.WriteNullValue();
+            return;
         }
+
+        writer.WriteStringValue(date.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
     }
 
     public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var readerString = reader.GetString();
-
-        if (string.IsNullOrEmpty(readerString))
+        if (reader.TokenType == JsonTokenType.Null)
         {
             return null;
         }
 
-        var date = DateTime.Parse(readerString);
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            throw new JsonException("Expected an ISO 8601 date/time string.");
+        }
 
-        if (date.Date == DateTime.MinValue)
+        var value = reader.GetString();
+        if (string.IsNullOrWhiteSpace(value))
         {
             return null;
         }
 
-        var dateUtc = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+        if (!DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsed))
+        {
+            throw new JsonException("Expected a valid ISO 8601 date/time string.");
+        }
 
-        return dateUtc;
+        return parsed.UtcDateTime;
     }
-
 }

@@ -1,6 +1,6 @@
 ﻿using CoreGoDelivery.Domain.MinIOFile;
 using CoreGoDelivery.Infrastructure.FileBucket.MinIO;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Minio;
 using Minio.DataModel.Args;
 
@@ -11,64 +11,54 @@ public class FileStorageService : IFileStorageService
     private readonly IMinioClient _minioClient;
     private readonly string _bucketName;
 
-    public FileStorageService(MinIOClientService minioClientService, IConfiguration configuration)
+    public FileStorageService(IMinIOClientService minioClientService, IOptions<MinIOSettings> options)
     {
         _minioClient = minioClientService.GetClient();
-        _bucketName = configuration.GetValue<string>("MinIOSettings:BucketLicenseCnh")!;
+        _bucketName = options.Value.BucketLicenseCnh;
     }
 
     public async Task UploadFileAsync(string fileName, Stream fileStream, string contentType)
     {
-        try
+        bool bucketExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(_bucketName));
+        if (!bucketExists)
         {
-            bool bucketExists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(_bucketName));
-            if (!bucketExists)
-            {
-                await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucketName));
-            }
+            await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucketName));
+        }
 
-            await _minioClient.PutObjectAsync(new PutObjectArgs()
-                .WithBucket(_bucketName)
-                .WithObject(fileName)
-                .WithStreamData(fileStream)
-                .WithObjectSize(fileStream.Length)
-                .WithContentType(contentType));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error uploading file: {ex.Message}");
-            throw;
-        }
+        await _minioClient.PutObjectAsync(new PutObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(fileName)
+            .WithStreamData(fileStream)
+            .WithObjectSize(fileStream.Length)
+            .WithContentType(contentType));
+    }
+
+    public async Task DeleteFileAsync(string fileName)
+    {
+        await _minioClient.RemoveObjectAsync(new RemoveObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(fileName));
     }
 
     public async Task<FileResult> GetFileAsync(string fileName)
     {
-        try
-        {
-            MemoryStream fileStream = new MemoryStream();
+        using var fileStream = new MemoryStream();
 
-            // Baixa o arquivo do MinIO
-            await _minioClient.GetObjectAsync(new GetObjectArgs()
-                .WithBucket(_bucketName)
-                .WithObject(fileName)
-                .WithCallbackStream(stream =>
-                {
-                    stream.CopyTo(fileStream);
-                    fileStream.Position = 0;
-                }));
-
-            string base64Content = Convert.ToBase64String(fileStream.ToArray());
-
-            return new FileResult
+        await _minioClient.GetObjectAsync(new GetObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(fileName)
+            .WithCallbackStream(stream =>
             {
-                FileName = fileName,
-                Base64Content = base64Content
-            };
-        }
-        catch (Exception ex)
+                stream.CopyTo(fileStream);
+                fileStream.Position = 0;
+            }));
+
+        string base64Content = Convert.ToBase64String(fileStream.ToArray());
+
+        return new FileResult
         {
-            Console.WriteLine($"Error downloading file: {ex.Message}");
-            throw;
-        }
+            FileName = fileName,
+            Base64Content = base64Content
+        };
     }
 }

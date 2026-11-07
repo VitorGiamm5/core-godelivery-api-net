@@ -7,24 +7,28 @@ public class DeliverierCreateValidator
 {
     public readonly DeliverierBuildMessageDeliverierCreate _buildMessageCreate;
     public readonly DeliverierBuildMessageCnh _buildMessageCnh;
+    public readonly DeliverierBuildMessageCnpj _buildMessageCnpj;
 
     public DeliverierCreateValidator(
         DeliverierBuildMessageDeliverierCreate buildMessageCreate,
-        DeliverierBuildMessageCnh buildMessageCnh)
+        DeliverierBuildMessageCnh buildMessageCnh,
+        DeliverierBuildMessageCnpj buildMessageCnpj)
     {
         _buildMessageCreate = buildMessageCreate;
         _buildMessageCnh = buildMessageCnh;
+        _buildMessageCnpj = buildMessageCnpj;
     }
 
     public async Task<StringBuilder> Validate(DeliverierCreateCommand data)
     {
         var message = new StringBuilder();
 
-        DeliverierBuildMessageCnpj.Build(message, data.Cnpj);
+        await _buildMessageCnpj.Build(message, data.Cnpj);
 
         DeliverierBuildMessageFullName.Build(data, message);
 
         DeliverierBuildMessageBirthDate.Build(data, message);
+        DeliverierBuildMessageLicenseDates.Build(data, message);
 
         DeliverierBuildMessageLicenseType.Build(data, message);
 

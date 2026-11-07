@@ -14,7 +14,7 @@ public static class DeliverierCreateMappers
         {
             Id = command.Id,
             FullName = command.FullName,
-            Cnpj = command.Cnpj.RemoveCharactersToUpper(),
+            Cnpj = command.Cnpj.NormalizeCnpj(),
             BirthDate = command.BirthDate,
             LicenceDriver = new LicenceDriverEntity()
             {

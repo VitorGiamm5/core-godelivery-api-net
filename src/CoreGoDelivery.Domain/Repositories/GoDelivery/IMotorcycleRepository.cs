@@ -4,7 +4,13 @@ namespace CoreGoDelivery.Domain.Repositories.GoDelivery;
 
 public interface IMotorcycleRepository
 {
-    Task<List<MotorcycleEntity>?> List(string? plate);
+    Task<(List<MotorcycleEntity> Items, int TotalCount)> List(
+        string? plate,
+        CoreGoDelivery.Domain.Enums.Pagination.MotorcycleListFindBy? findBy,
+        string? valueToFind,
+        CoreGoDelivery.Domain.Enums.Pagination.OrderByEnum orderBy,
+        int page,
+        int limit);
     Task<MotorcycleEntity?> GetOneByIdAsync(string id);
     Task<bool> CheckIsUnicById(string id);
     Task<bool> CheckIsUnicByPlateAsync(string plate);

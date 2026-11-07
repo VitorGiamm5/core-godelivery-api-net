@@ -1,17 +1,17 @@
-﻿using CoreGoDelivery.Api.Controllers.Base;
+using CoreGoDelivery.Api.Controllers.Base;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.ChangePlateById;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Create;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Commands.Delete;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Queries.GetOne;
 using CoreGoDelivery.Application.Services.Internal.Motorcycle.Queries.List;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CoreGoDelivery.Api.Controllers;
 
 [Route("api/motorcycles")]
 [ApiController]
-public class MotorcycleController(IMediator _mediator) : BaseApiController
+public class MotorcycleController(IMediator _mediator, ILogger<BaseApiController> logger) : BaseApiController(logger)
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] MotorcycleListQueryCommand request)

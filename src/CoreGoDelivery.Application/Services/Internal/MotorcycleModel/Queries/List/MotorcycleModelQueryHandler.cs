@@ -1,7 +1,7 @@
-﻿using CoreGoDelivery.Domain.Entities.GoDelivery.MotorcycleModel;
+using CoreGoDelivery.Domain.Entities.GoDelivery.MotorcycleModel;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.MotorcycleModel.Queries.List;
 
@@ -14,13 +14,13 @@ public class MotorcycleModelQueryHandler : IRequestHandler<MotorcycleModelQueryC
         _repositoryMotorcycleModel = repositoryMotorcycleModel;
     }
 
-    public async Task<ActionResult> Handle(MotorcycleModelQueryCommand request, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(MotorcycleModelQueryCommand request, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 
         List<MotorcycleModelEntity> result = await _repositoryMotorcycleModel.GetAll(request.Name, request.Id);
 
-        apiReponse.SetPaginedData(result, 1, 1, 1);
+        apiReponse.SetPaginedData(result, result.Count, 1, Math.Max(result.Count, 1));
 
         return apiReponse;
     }

@@ -1,7 +1,10 @@
 ﻿using CoreGoDelivery.Domain.Entities.GoDelivery.Motorcycle;
 using CoreGoDelivery.Domain.Repositories.GoDelivery;
+using CoreGoDelivery.Domain.Entities.GoDelivery.NotificationMotorcycle;
+using CoreGoDelivery.Domain.Enums.Pagination;
 using CoreGoDelivery.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace CoreGoDelivery.Infrastructure.Repositories.GoDelivery;
 
@@ -12,25 +15,63 @@ public class MotorcycleRepository : BaseRepository<MotorcycleEntity>, IMotorcycl
 
     }
 
-    public async Task<List<MotorcycleEntity>?> List(string? plate)
+    public async Task<(List<MotorcycleEntity> Items, int TotalCount)> List(
+        string? plate,
+        MotorcycleListFindBy? findBy,
+        string? valueToFind,
+        OrderByEnum orderBy,
+        int page,
+        int limit)
     {
-        if (!string.IsNullOrEmpty(plate))
-        {
-            var entity = await _context.Set<MotorcycleEntity>()
-                .Include(x => x.MotorcycleModel)
-                .Where(x => x.PlateNormalized == plate)
-                .Take(100)
-                .ToListAsync();
+        IQueryable<MotorcycleEntity> query = _context.Set<MotorcycleEntity>()
+            .Include(x => x.MotorcycleModel);
 
-            return entity;
+        if (!string.IsNullOrWhiteSpace(plate))
+        {
+            query = query.Where(x => x.PlateNormalized == plate);
         }
 
-        var resultWithParam = await _context.Set<MotorcycleEntity>()
-            .Include(x => x.MotorcycleModel)
-            .Take(100)
+        if (findBy is not null && !string.IsNullOrWhiteSpace(valueToFind))
+        {
+            switch (findBy.Value)
+            {
+                case MotorcycleListFindBy.create_date:
+                    var date = DateTimeOffset.Parse(valueToFind, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal).UtcDateTime.Date;
+                    query = query.Where(x => x.DateCreated >= date && x.DateCreated < date.AddDays(1));
+                    break;
+                case MotorcycleListFindBy.manufacture_year:
+                    var year = int.Parse(valueToFind, CultureInfo.InvariantCulture);
+                    query = query.Where(x => x.YearManufacture == year);
+                    break;
+                case MotorcycleListFindBy.manufacture_year_start:
+                    var startYear = int.Parse(valueToFind, CultureInfo.InvariantCulture);
+                    query = query.Where(x => x.YearManufacture >= startYear);
+                    break;
+                case MotorcycleListFindBy.manufacture_year_end:
+                    var endYear = int.Parse(valueToFind, CultureInfo.InvariantCulture);
+                    query = query.Where(x => x.YearManufacture <= endYear);
+                    break;
+                case MotorcycleListFindBy.model_name:
+                    query = query.Where(x => x.MotorcycleModel != null && x.MotorcycleModel.NormalizedName == valueToFind);
+                    break;
+                case MotorcycleListFindBy.model_id:
+                    query = query.Where(x => x.MotorcycleModelId == valueToFind);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(findBy), findBy, "Unsupported motorcycle filter.");
+            }
+        }
+
+        var totalCount = await query.CountAsync();
+        var orderedQuery = orderBy == OrderByEnum.asc
+            ? query.OrderBy(x => x.DateCreated).ThenBy(x => x.Id)
+            : query.OrderByDescending(x => x.DateCreated).ThenByDescending(x => x.Id);
+        var items = await orderedQuery
+            .Skip((page - 1) * limit)
+            .Take(limit)
             .ToListAsync();
 
-        return resultWithParam;
+        return (items, totalCount);
     }
 
     public async Task<MotorcycleEntity?> GetOneByIdAsync(string id)
@@ -64,7 +105,14 @@ public class MotorcycleRepository : BaseRepository<MotorcycleEntity>, IMotorcycl
             .Set<MotorcycleEntity>()
             .AddAsync(data);
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (PostgreSqlConstraintErrors.IsUniqueViolation(exception))
+        {
+            return false;
+        }
 
         return IsSuccessCreate(entity);
     }
@@ -75,10 +123,21 @@ public class MotorcycleRepository : BaseRepository<MotorcycleEntity>, IMotorcycl
 
         if (motorcycle != null)
         {
-            _context.Set<MotorcycleEntity>()
-                .Remove(motorcycle);
+            var notifications = await _context.Set<NotificationMotorcycleEntity>()
+                .Where(notification => notification.IdMotorcycle == id)
+                .ToListAsync();
 
-            await _context.SaveChangesAsync();
+            _context.Set<NotificationMotorcycleEntity>().RemoveRange(notifications);
+            _context.Set<MotorcycleEntity>().Remove(motorcycle);
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return false;
+            }
 
             return true;
         }
@@ -100,7 +159,14 @@ public class MotorcycleRepository : BaseRepository<MotorcycleEntity>, IMotorcycl
         {
             entity.PlateNormalized = plate;
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException exception) when (PostgreSqlConstraintErrors.IsUniqueViolation(exception))
+            {
+                return false;
+            }
 
             return true;
         }

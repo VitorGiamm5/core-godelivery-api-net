@@ -9,8 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Polly;
-using Polly.Retry;
+using Microsoft.Extensions.Options;
 
 namespace CoreGoDelivery.Infrastructure;
 
@@ -22,26 +21,22 @@ public static class SetupInfrastructure
 
         AddRepositories(services);
 
-        RetryPolicy retryPolicy = Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                onRetry: (exception, timespan, attempt, context) =>
-                {
-                    Console.WriteLine($"Retry {attempt} fail with error: {exception.Message}. Lets try again {timespan}.");
-                });
-
         services.AddDbContextPool<ApplicationDbContext>(options =>
         {
-            retryPolicy.Execute(() =>
-            {
-                options.UseNpgsql().AddInfrastructure(configuration);
-            });
+            options.UseNpgsql().AddInfrastructure(configuration);
         });
 
-        services.AddScoped<MinIOClientService>();
-        services.Configure<MinIOSettings>(configuration.GetSection("MinIOSettings"));
+        services.AddOptions<MinIOSettings>()
+            .Bind(configuration.GetSection("MinIOSettings"))
+            .Validate(settings =>
+                !string.IsNullOrWhiteSpace(settings.Endpoint) &&
+                settings.Port is > 0 and <= 65535 &&
+                !string.IsNullOrWhiteSpace(settings.AccessKey) &&
+                !string.IsNullOrWhiteSpace(settings.SecretKey) &&
+                !string.IsNullOrWhiteSpace(settings.BucketLicenseCnh),
+                "MinIO settings are incomplete or invalid.")
+            .ValidateOnStart();
+
         services.TryAddSingleton<IMinIOClientService, MinIOClientService>();
         services.TryAddScoped<IFileStorageService, FileStorageService>();
 

@@ -1,4 +1,3 @@
-﻿using Azure.Core;
 using CoreGoDelivery.Application.Extensions;
 using CoreGoDelivery.Application.Services.Internal.Deliverier.Commands.Create.Common;
 using CoreGoDelivery.Application.Services.Internal.LicenseDriver.Commands.Create.Common;
@@ -7,7 +6,7 @@ using CoreGoDelivery.Domain.Repositories.GoDelivery;
 using CoreGoDelivery.Domain.Response.BaseResponse;
 using CoreGoDelivery.Infrastructure.FileBucket.ContentType;
 using CoreGoDelivery.Infrastructure.FileBucket.FileStorage;
-using MediatR;
+using Mediator;
 
 namespace CoreGoDelivery.Application.Services.Internal.LicenseDriver.Commands.Create;
 
@@ -27,7 +26,7 @@ public class LicenseDriverHandler : IRequestHandler<LicenseImageCommand, ActionR
         _validator = validator;
     }
 
-    public async Task<ActionResult> Handle(LicenseImageCommand command, CancellationToken cancellationToken)
+    public async ValueTask<ActionResult> Handle(LicenseImageCommand command, CancellationToken cancellationToken)
     {
         var apiReponse = new ActionResult();
 
@@ -48,25 +47,36 @@ public class LicenseDriverHandler : IRequestHandler<LicenseImageCommand, ActionR
         }
 
         var (_, _, fileExtension) = ImageValidateExtensionFile.Build(command.LicenseImageBase64);
+        var imageReference = NameCreatorFile.LicenseDriver(command.IdLicenseNumber!, fileExtension);
 
-        license.ImageUrlReference = NameCreatorFile.LicenseDriver(command.IdLicenseNumber!, fileExtension);
+        using var stream = new MemoryStream(command.LicenseImageBase64);
 
-        await _repositoryLicense.UpdateFileName(license.Id, license.ImageUrlReference);
-    
-        using Stream stream = new MemoryStream(command.LicenseImageBase64);
-
-        var contentType = GetContentType.Get(license.ImageUrlReference);
+        var contentType = GetContentType.Get(imageReference);
 
         try
         {
-            await _fileService.UploadFileAsync(license.ImageUrlReference, stream, contentType);
+            await _fileService.UploadFileAsync(imageReference, stream, contentType);
+            if (!await _repositoryLicense.UpdateFileName(license.Id, imageReference))
+            {
+                throw new InvalidOperationException("The license image reference could not be saved.");
+            }
         }
-        catch (Exception ex)
+        catch (Exception uploadException)
         {
-            System.Diagnostics.Debug.WriteLine(ex);
+            try
+            {
+                await _fileService.DeleteFileAsync(imageReference);
+            }
+            catch (Exception cleanupException)
+            {
+                throw new InvalidOperationException(
+                    $"License image operation failed ({uploadException.GetType().Name}) and object cleanup failed ({cleanupException.GetType().Name}).");
+            }
 
-            apiReponse.SetError(ex.Message);
+            throw new InvalidOperationException($"License image operation failed ({uploadException.GetType().Name}).");
         }
+
+        license.ImageUrlReference = imageReference;
 
         apiReponse.SetData(new 
         { 

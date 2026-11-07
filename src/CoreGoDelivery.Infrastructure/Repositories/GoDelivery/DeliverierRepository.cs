@@ -41,7 +41,14 @@ public class DeliverierRepository : BaseRepository<DeliverierEntity>, IDeliverie
             .Set<DeliverierEntity>()
             .AddAsync(data);
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (PostgreSqlConstraintErrors.IsUniqueViolation(exception))
+        {
+            return false;
+        }
 
         return IsSuccessCreate(result);
     }

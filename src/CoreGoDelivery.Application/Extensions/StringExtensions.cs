@@ -22,4 +22,14 @@ public static class StringExtensions
 
         return result;
     }
+
+    public static string NormalizeCnpj(this string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        return Regex.Replace(text, RegexCollectionPatterns.CNPJ_NON_DIGIT_PATTERN, string.Empty);
+    }
 }
